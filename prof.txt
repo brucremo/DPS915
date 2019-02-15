@@ -1,0 +1,8 @@
+Flat profile:
+
+Each sample counts as 0.01 seconds.
+  %   cumulative   self              self     total           
+ time   seconds   seconds    calls  Ts/call  Ts/call  name    
+ 97.67      5.98     5.98                             Triangle::calculateDimensions(double, double, double, int)
+  0.00      5.98     0.00     2842     0.00     0.00  Triangle::printDimensions(double, double, double)
+  0.00      5.98     0.00        1     0.00     0.00  _GLOBAL__sub_I__ZN8TriangleC2Edddi
