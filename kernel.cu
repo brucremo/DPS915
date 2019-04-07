@@ -1,7 +1,6 @@
 //exercise 5.20 Deitel and deitel pag 242
 //file: triangle_main.cpp
 //file containing main function
-#include "triangle.h" //include definition of class triangle
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <thrust/device_vector.h>
@@ -17,6 +16,7 @@
 #include <algorithm>
 #include <cmath> //for the power function
 #include <chrono>
+#include <time.h>
 #include <vector> 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -29,19 +29,25 @@ using namespace std::chrono;
 
 // constants in the program
 const int EXPONENT = 2;
-const int ntpb = 1024;
+//const int ntpb = 1024;
 
-__global__ void valueCheck(float value, float * arr, float * check, int size) {
-
+__global__ void valueCheck(float value, float * arr, float * check, const int size) {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	int t = threadIdx.x;
+	__shared__ float s_check[ntpb];
+	__shared__ float s_arr[ntpb];
+	
+	s_check[t] = check[idx];
+	s_arr[t] = arr[idx];
+	__syncthreads();
 
 	if (idx < size) {
 
 		for (int i = 0; i < size; i++) {
 
-			if ( (pow(value, EXPONENT) + pow(arr[i], EXPONENT) ) == pow(check[idx], EXPONENT)) {
+			if ((value * value) + (s_arr[i] * s_arr[i]) == (s_check[t] * s_check[t]) {
 
-				printf("Triple: ( %f  %f  %f )\n", value, arr[i], check[idx]);
+				printf("Triple: ( %f  %f  %f )\n", value, s_arr[i], s_check[t]);
 			}
 		}
 
@@ -49,11 +55,9 @@ __global__ void valueCheck(float value, float * arr, float * check, int size) {
 	}
 }
 
-/*the constructors initialize the values of the sides to 1 and pass them to the
-calculateDimensions functions */
-Triangle::Triangle(double Side1, double Side2, double Hypot, int hypotMaxSize){
+void printDimensions(float side1, float side2, float hypotenuse) {
 
-	calculateDimensions(Side1, Side2, Hypot, hypotMaxSize);
+	cout << "Triple: ( " << side1 << " , " << side2 << " , " << hypotenuse << " ) " << endl;
 }
 
 float gen() {
@@ -63,7 +67,7 @@ float gen() {
 }
 
 //set the 3 dimensions and calculates the Pythagorean triple
-void Triangle::calculateDimensions(double Side1, double Side2, double Hypot, int hypotMaxSize){
+void calculateCUDA(float Side1, float Side2, float Hypot, int hypotMaxSize) {
 
 	//Gathering device properties and calculating blocks and grids
 	int d;
@@ -94,32 +98,60 @@ void Triangle::calculateDimensions(double Side1, double Side2, double Hypot, int
 	//Get initial data position on the vector
 	float * pos = h_v.data();
 
+	// launch
+	int nb = (hypotMaxSize + ntpb - 1) / ntpb;
+
+
 	for (int i = 0; i < hypotMaxSize; i++) {
 
-		valueCheck <<<(hypotMaxSize + ntpb - 1) / ntpb, ntpb >>> (*pos++, d_s2, d_Hyp, hypotMaxSize);
+		valueCheck << <nb, ntpb >> > (*pos++, d_s2, d_Hyp, hypotMaxSize);
+		cudaDeviceSynchronize();
 	}
 }
 
-void Triangle::printDimensions(double side1, double side2, double hypotenuse){
+void calculateSerial(float Side1, float Side2, float Hypot, int hypotMaxSize) {
 
-	cout << "( " << side1 << " , " << side2 << " , " << hypotenuse << " ) " << endl;
+	//int i = 0 ; //for the iteration in the for loop
+	for (int i = 1; i <= hypotMaxSize; i++) {
+
+		Side1 = i;
+		for (int j = 1; j <= hypotMaxSize; j++) {
+
+			Side2 = j;
+			for (int k = 1; k <= hypotMaxSize; k++) {
+
+				Hypot = k;
+				if ((Side1 * Side1) + (Side2 * Side2) == (Hypot * Hypot)) {
+
+					printDimensions(Side1, Side2, Hypot);
+				}
+			}
+		}
+	}
 }
 
 int main(int argc, char * argv[]) {
 
 	//Timing start
-	auto start = high_resolution_clock::now();
+	clock_t t;
+	t = clock();
 
-	Triangle rightTriangle(std::stof(argv[1]), std::stof(argv[2]), std::stof(argv[3]), std::stoi(argv[4])); //create Triangle object
-	cudaDeviceSynchronize();
+	calculateCUDA(std::stof(argv[1]), std::stof(argv[2]), std::stof(argv[3]), std::stoi(argv[4])); //create Triangle object
 
 	//Timing capture
-	auto stop = high_resolution_clock::now();
-	auto duration = duration_cast<microseconds>(stop - start);
+	t = clock() - t;
 
-	// To get the value of duration use the count() 
-	// member function on the duration object 
-	cout << duration.count() << endl;
+	//Timing start
+	clock_t b;
+	b = clock();
+
+	calculateSerial(std::stof(argv[1]), std::stof(argv[2]), std::stof(argv[3]), std::stoi(argv[4])); //create Triangle object
+
+	cout << "time on GPU: " << t * 1.0 / CLOCKS_PER_SEC << " seconds" << endl;
+
+	//Timing capture
+	b = clock() - b;
+	cout << "time on CPU: " << b * 1.0 / CLOCKS_PER_SEC << " seconds" << endl;
 
 	return 0;
 }
